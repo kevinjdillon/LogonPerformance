@@ -151,42 +151,57 @@ $logonActivities | ForEach-Object {
         } # End Find Logon Scripts Loop
 
     #Find Winlogon events During time preiod
-    $AuthActivities = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Winlogon/Operational';ID='1','2';StartTime=$WinlogonSearchStart;EndTime=$WinlogonSearchStop} | Select-Object -ErrorAction SilentlyContinue
-        $AuthActivities | ForEach-Object {
+    $AuthActivities = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Winlogon/Operational';ID='1','2';StartTime=$WinlogonSearchStart;EndTime=$WinlogonSearchStop} -ErrorAction SilentlyContinue
+    $LogonCompleteEvents = $AuthActivities | Where-Object {$_.Id -eq 2} -ErrorAction SilentlyContinue
+    If ($LogonCompleteEvents) {
+        If ($LogonCompleteEvents -is [array]) {
+            $LogonComplete = $LogonCompleteEvents[-1]
+        }
+        Else {$LogonComplete = $LogonCompleteEvents}
 
-            $TimeCreated = ""
-            $MachineName = ""
-            $EventID = ""
-            $Action = ""
-            $CSEName = ""
-            $Duration = ""
+        #Get Variables
+        $TimeCreated = $LogonComplete.TimeCreated
+        $MachineName = $LogonComplete.MachineName
+        $EventID = $LogonComplete.Id
 
-            #Get Variables
-            $TimeCreated = $_.TimeCreated
-            $MachineName = $_.MachineName
-            $EventID = $_.Id
-
-            switch($EventID){
-                1 {$Action = "Authentication Start"}
-                2 {$Action = "Authentication Complete"}
-            } # End Switch
-
-            #$Duration = Event2 - Event1
-
-            $obj = New-Object -TypeName PSCustomObject -Property @{
+        $obj = New-Object -TypeName PSCustomObject -Property @{
             SessionID = $ActivityID.Guid
             TimeCreated = $TimeCreated.ToString("MM/dd/yyyy HH:mm:ss.fff")
             MachineName = $MachineName
             EventID = $EventID
-            Action = $Action
-            ActivityName = $Action
+            Action = "Authentication Complete"
+            ActivityName = "Authentication Complete"
             UserName = $UserName
-            Duration = $Duration
+            Duration = ""
             }
+        $EventList += $obj
+    }
 
-            $EventList += $obj
-        } # End Winlogon Auth Activities
+    $LogonStartEvents = $AuthActivities | Where-Object {($_.Id -eq 1) -and ($_.TimeCreated -lt $LogonComplete.TimeCreated)} -ErrorAction SilentlyContinue
+    If ($LogonStartEvents) {
+        If ($LogonStartEvents -is [array]) {
+            $LogonStart = $LogonStartEvents[-1]
+        }
+        Else {$LogonStart = $LogonStartEvents}
 
+        #Get Variables
+        $TimeCreated = $LogonStart.TimeCreated
+        $MachineName = $LogonStart.MachineName
+        $EventID = $LogonStart.Id
+
+        $obj = New-Object -TypeName PSCustomObject -Property @{
+            SessionID = $ActivityID.Guid
+            TimeCreated = $TimeCreated.ToString("MM/dd/yyyy HH:mm:ss.fff")
+            MachineName = $MachineName
+            EventID = $EventID
+            Action = "Authentication Start"
+            ActivityName = "Authentication Start"
+            UserName = $UserName
+            Duration = ""
+            }
+        $EventList += $obj
+    }
+    # End Winlogon Auth Activities
 
     #Find Desktop launch events during logon timeperiod
     $DesktopAvail = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-GroupPolicy/Operational';ID='6339';StartTime=$StartPolicy;EndTime=$StopPolicy} -ErrorAction SilentlyContinue
